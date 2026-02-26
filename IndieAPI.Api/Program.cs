@@ -19,7 +19,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowIndieFrontend", policy =>
     {
-        policy.WithOrigins("https://indie.geoffery10.com")
+        policy.WithOrigins("https://indie.geoffery10.com", "http://localhost", "https://localhost")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
