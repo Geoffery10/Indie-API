@@ -2,12 +2,20 @@ using System.Net.Http.Headers;
 using IndieAPI.Api.Endpoints;
 using IndieAPI.Api.Interfaces;
 using IndieAPI.Api.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // --- 1. CONFIGURATION & SERVICES ---
 var haBaseUrl = builder.Configuration["HomeAssistant:BaseUrl"];
 var haToken = builder.Configuration["HomeAssistant:Token"];
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.AddHttpClient<IHomeAssistantService, HomeAssistantService>(client =>
 {
@@ -19,7 +27,11 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowIndieFrontend", policy =>
     {
-        policy.WithOrigins("https://api.indie.geoffery10.com", "http://localhost:5500", "http://127.0.0.1:5500")
+        policy.WithOrigins(
+                "https://indie.geoffery10.com", 
+                "http://localhost:5500", 
+                "http://127.0.0.1:5500"
+              )
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -28,7 +40,7 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // --- 2. MIDDLEWARE ---
-app.UseHttpsRedirection();
+app.UseForwardedHeaders();
 app.UseCors("AllowIndieFrontend");
 
 // --- 3. ENDPOINTS ---
