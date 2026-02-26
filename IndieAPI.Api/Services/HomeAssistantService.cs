@@ -1,22 +1,7 @@
-using System.Text.Json.Serialization;
+using IndieAPI.Api.Interfaces;
+using IndieAPI.Api.Models;
 
-namespace IndieAPI.Api;
-
-// 1. The Interface
-public interface IHomeAssistantService
-{
-    Task<string> GetDailyVerseAsync();
-}
-
-// 2. The Model to parse Home Assistant's JSON response
-public class HaStateResponse
-{
-    [JsonPropertyName("state")]
-    public string State { get; set; } = string.Empty;
-
-    [JsonPropertyName("attributes")]
-    public Dictionary<string, object>? Attributes { get; set; }
-}
+namespace IndieAPI.Api.Services;
 
 public class HomeAssistantService : IHomeAssistantService
 {
@@ -33,7 +18,6 @@ public class HomeAssistantService : IHomeAssistantService
     {
         try
         {
-            // Call the Home Assistant REST API for your specific sensor
             var response = await _httpClient.GetAsync("/api/states/sensor.daily_bible_verse");
             response.EnsureSuccessStatusCode();
 
@@ -41,8 +25,6 @@ public class HomeAssistantService : IHomeAssistantService
 
             if (haData == null) return "Verse unavailable.";
 
-            // HA limits states to 255 chars. If the sensor stores the full text in an attribute, 
-            // check there first. Replace "text" with whatever your sensor attribute is called (if any).
             if (haData.Attributes != null && haData.Attributes.TryGetValue("text", out var fullText))
             {
                 return fullText.ToString() ?? haData.State;
@@ -52,8 +34,8 @@ public class HomeAssistantService : IHomeAssistantService
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to fetch daily verse from Home Assistant.");
-            return "Could not retrieve the daily verse at this time.";
+            _logger.LogError(ex, "Failed to fetch daily verse.");
+            return "Could not retrieve the daily verse.";
         }
     }
 }

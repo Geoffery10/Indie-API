@@ -1,26 +1,20 @@
 using System.Net.Http.Headers;
-using IndieAPI.Api;
+using IndieAPI.Api.Endpoints;
+using IndieAPI.Api.Interfaces;
+using IndieAPI.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- SECRETS & HTTP CLIENT CONFIGURATION ---
+// --- 1. CONFIGURATION & SERVICES ---
 var haBaseUrl = builder.Configuration["HomeAssistant:BaseUrl"];
 var haToken = builder.Configuration["HomeAssistant:Token"];
 
-// Register the HttpClient for our Home Assistant Service
 builder.Services.AddHttpClient<IHomeAssistantService, HomeAssistantService>(client =>
 {
-    if (!string.IsNullOrEmpty(haBaseUrl))
-    {
-        client.BaseAddress = new Uri(haBaseUrl);
-    }
-    if (!string.IsNullOrEmpty(haToken))
-    {
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", haToken);
-    }
+    if (!string.IsNullOrEmpty(haBaseUrl)) client.BaseAddress = new Uri(haBaseUrl);
+    if (!string.IsNullOrEmpty(haToken)) client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", haToken);
 });
 
-// Setup CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowIndieFrontend", policy =>
@@ -33,21 +27,14 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// --- 2. MIDDLEWARE ---
 app.UseHttpsRedirection();
 app.UseCors("AllowIndieFrontend");
 
-// --- ENDPOINTS ---
-app.MapGet("/api/health", () => Results.Ok(new { Status = "Healthy", Version = "1.0", Service = "IndieAPI" }));
+// --- 3. ENDPOINTS ---
+app.MapGet("/api/health", () => Results.Ok(new { Status = "Healthy" }));
 
-// New Daily Verse Endpoint!
-app.MapGet("/api/bible-daily-verse", async (IHomeAssistantService haService) => 
-{
-    var verse = await haService.GetDailyVerseAsync();
-    
-    // Return an anonymous object so it automatically formats as JSON for your frontend
-    return Results.Ok(new { Verse = verse });
-});
+// Register the Bible endpoints cleanly
+app.MapBibleEndpoints();
 
 app.Run();
-
-public partial class Program { }
