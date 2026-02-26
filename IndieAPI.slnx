@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="IndieAPI.Api/IndieAPI.Api.csproj" />
+  <Project Path="IndieAPI.Tests/IndieAPI.Tests.csproj" />
+</Solution>
