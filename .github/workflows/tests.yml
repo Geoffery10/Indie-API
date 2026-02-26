@@ -1,0 +1,45 @@
+name: Test and Cover
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: [ '11.0.x' ] # Matching your project's version
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET ${{ matrix.dotnet-version }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet-version }}
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore
+
+    - name: Test
+      run: |
+        dotnet test IndieAPI.Tests/IndieAPI.Tests.csproj \
+        --no-build \
+        --verbosity normal \
+        /p:CollectCoverage=true \
+        /p:CoverletOutputFormat=lcov \
+        /p:CoverletOutput=../../coverage/lcov.info
+
+    - name: Upload coverage reports to Coveralls
+      if: ${{ matrix.dotnet-version == '11.0.x' }} # Adapted from your snippet to match .NET version
+      continue-on-error: true
+      uses: coverallsapp/github-action@v2
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        path-to-lcov: ./coverage/lcov.info
