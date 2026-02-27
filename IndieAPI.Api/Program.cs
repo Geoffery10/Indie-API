@@ -17,6 +17,14 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
+// --- Immich Service ---
+builder.Services.AddHttpClient<IImmichService, ImmichService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["Immich:BaseUrl"] ?? "http://localhost");
+    client.DefaultRequestHeaders.Add("x-api-key", builder.Configuration["Immich:ApiKey"]);
+});
+
+// --- Home Assistant Service ---
 builder.Services.AddHttpClient<IHomeAssistantService, HomeAssistantService>(client =>
 {
     if (!string.IsNullOrEmpty(haBaseUrl)) client.BaseAddress = new Uri(haBaseUrl);
@@ -45,8 +53,7 @@ app.UseCors("AllowIndieFrontend");
 
 // --- 3. ENDPOINTS ---
 app.MapGet("/api/health", () => Results.Ok(new { Status = "Healthy" }));
-
-// Register the Bible endpoints cleanly
 app.MapBibleEndpoints();
+app.MapArtEndpoints();
 
 app.Run();
