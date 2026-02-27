@@ -24,7 +24,7 @@ public class ImmichService : IImmichService
             var album = await _httpClient.GetFromJsonAsync<ImmichAlbumResponse>($"/api/albums/{id}");
             if (album?.Assets != null)
             {
-                allAssets.AddRange(album.Assets);
+                allAssets.AddRange(album.Assets.Where(a => a.Type == "IMAGE"));
             }
         }
 
