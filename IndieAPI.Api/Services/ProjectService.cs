@@ -9,22 +9,38 @@ namespace IndieAPI.Api.Services;
 public class ProjectService : IProjectService
 {
     private readonly IWebHostEnvironment _env;
+    private readonly IConfiguration _config;
     private List<FullArticle>? _cachedArticles;
     private readonly IDeserializer _yamlDeserializer;
     private readonly MarkdownPipeline _markdownPipeline;
 
-    public ProjectService(IWebHostEnvironment env)
+    public ProjectService(IWebHostEnvironment env, IConfiguration config)
     {
         _env = env;
+        _config = config;
+        
         _yamlDeserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
             .Build();
 
-        // Configures Markdig to support tables, embedded HTML, auto-links, etc.
         _markdownPipeline = new MarkdownPipelineBuilder()
             .UseAdvancedExtensions()
             .Build();
+    }
+
+    private string GetProjectsRoot()
+    {
+        // 1. Check for the Environment Variable / Config
+        var customPath = _config["Projects:Directory"];
+        
+        if (!string.IsNullOrEmpty(customPath))
+        {
+            return customPath;
+        }
+
+        // 2. Fallback to the default internal folder
+        return Path.Combine(_env.ContentRootPath, "Data", "Projects");
     }
 
     private async Task EnsureArticlesLoadedAsync()
@@ -33,8 +49,15 @@ public class ProjectService : IProjectService
 
         _cachedArticles = new List<FullArticle>();
 
-        var contentPath = Path.Combine(_env.ContentRootPath, "Data", "Projects");
-        if (!Directory.Exists(contentPath)) Directory.CreateDirectory(contentPath);
+        var contentPath = GetProjectsRoot();
+
+        if (!Directory.Exists(contentPath))
+        {
+            if (!string.IsNullOrEmpty(_config["Projects:Directory"])) return;
+            
+            Directory.CreateDirectory(contentPath);
+            return;
+        }
 
         var files = Directory.GetFiles(contentPath, "*.md", SearchOption.AllDirectories);
 
@@ -122,7 +145,6 @@ public class ProjectService : IProjectService
         return _cachedArticles!.FirstOrDefault(a => a.Link.Equals(linkId, StringComparison.OrdinalIgnoreCase));
     }
 
-    // NEW: Streams the image files directly from the disk
     public IResult GetAsset(string path)
     {
         // path will be something like "2026/Stoat-Sync/stoat-sync-profile.png"
