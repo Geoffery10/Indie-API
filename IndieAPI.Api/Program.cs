@@ -31,6 +31,8 @@ builder.Services.AddHttpClient<IHomeAssistantService, HomeAssistantService>(clie
     if (!string.IsNullOrEmpty(haToken)) client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", haToken);
 });
 
+builder.Services.AddSingleton<IProjectService, ProjectService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowIndieFrontend", policy =>
@@ -55,5 +57,6 @@ app.UseCors("AllowIndieFrontend");
 app.MapGet("/api/health", () => Results.Ok(new { Status = "Healthy" }));
 app.MapBibleEndpoints();
 app.MapArtEndpoints();
+app.MapProjectEndpoints();
 
 app.Run();
