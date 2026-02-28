@@ -11,6 +11,8 @@ public class ProjectService : IProjectService
     private readonly IWebHostEnvironment _env;
     private readonly IConfiguration _config;
     private List<FullArticle>? _cachedArticles;
+    private DateTime _lastCacheUpdate = DateTime.MinValue;
+    private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(1);
     private readonly IDeserializer _yamlDeserializer;
     private readonly MarkdownPipeline _markdownPipeline;
 
@@ -45,30 +47,36 @@ public class ProjectService : IProjectService
 
     private async Task EnsureArticlesLoadedAsync()
     {
-        if (_cachedArticles != null) return;
+        if (_cachedArticles != null && (DateTime.UtcNow - _lastCacheUpdate) < _cacheDuration)
+        {
+            return;
+        }
 
-        _cachedArticles = new List<FullArticle>();
+        var newArticleList = new List<FullArticle>();
 
         var contentPath = GetProjectsRoot();
 
         if (!Directory.Exists(contentPath))
         {
             if (!string.IsNullOrEmpty(_config["Projects:Directory"])) return;
-            
             Directory.CreateDirectory(contentPath);
             return;
         }
-
+        
         var files = Directory.GetFiles(contentPath, "*.md", SearchOption.AllDirectories);
 
         foreach (var file in files)
         {
             var fileContent = await File.ReadAllTextAsync(file);
             var article = ParseMarkdownFile(fileContent);
-            if (article != null) _cachedArticles.Add(article);
+            if (article != null) newArticleList.Add(article);
         }
 
-        _cachedArticles = _cachedArticles.OrderByDescending(a => a.Date).ToList();
+        // Sort by date descending
+        _cachedArticles = newArticleList.OrderByDescending(a => a.Date).ToList();
+        
+        // Reset the timer
+        _lastCacheUpdate = DateTime.UtcNow;
     }
 
     private FullArticle? ParseMarkdownFile(string fileContent)
