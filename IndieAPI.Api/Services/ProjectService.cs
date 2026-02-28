@@ -75,49 +75,8 @@ public class ProjectService : IProjectService
             var markdownBody = parts[1].Trim();
             var frontmatter = _yamlDeserializer.Deserialize<ArticleFrontmatter>(yamlContent);
 
-            // --- 1. HANDLE THUMBNAIL PATH (Strict Fix) ---
-            var thumbnail = frontmatter.Thumbnail;
-
-            // Check specifically for the old absolute format
-            if (thumbnail.StartsWith("/projects/"))
-            {
-                thumbnail = thumbnail.Replace("/projects/", "/api/projects/asset/");
-            }
-            // Check specifically for "naked" filenames (no slash, no http)
-            else if (!thumbnail.Contains("/") && !thumbnail.StartsWith("http"))
-            {
-                thumbnail = $"/api/projects/asset/{relativeFolder}/{thumbnail}";
-            }
-            // (If it already starts with /api/ or http, we leave it alone)
-
-            // --- 2. HANDLE MARKDOWN BODY ---
-            
-            var cleanMarkdown = markdownBody.Replace(".md)", ".html)");
-
-            // REGEX 1: Fix Naked Images in Markdown
-            // Transforms ![Alt](img.png) -> ![Alt](/api/projects/asset/Folder/img.png)
-            string imgPattern = @"(!\[.*?\]\()(?!(http|/))(.*?)(\))";
-            cleanMarkdown = Regex.Replace(cleanMarkdown, imgPattern, m => 
-            {
-                var prefix = m.Groups[1].Value;
-                var filename = m.Groups[3].Value;
-                var suffix = m.Groups[4].Value;
-                return $"{prefix}/api/projects/asset/{relativeFolder}/{filename}{suffix}";
-            });
-
-            // REGEX 2: Minify HTML Footer (The Newline Fix)
-            // Finds any newline that sits between a closing tag > and an opening tag <
-            // Example: "<img>\n<a>" becomes "<img><a>"
-            string footerPattern = @"(?<=>)\s*\n\s*(?=<)";
-            cleanMarkdown = Regex.Replace(cleanMarkdown, footerPattern, "");
-
-            // Legacy cleanup (Only runs if the string explicitly contains the old path)
-            if (cleanMarkdown.Contains("](/projects/"))
-                cleanMarkdown = cleanMarkdown.Replace("](/projects/", "](/api/projects/asset/");
-            if (cleanMarkdown.Contains("src=\"/projects/"))
-                cleanMarkdown = cleanMarkdown.Replace("src=\"/projects/", "src=\"/api/projects/asset/");
-
-            var htmlContent = Markdown.ToHtml(cleanMarkdown, _markdownPipeline);
+            var thumbnail = ProcessThumbnailPath(frontmatter.Thumbnail, relativeFolder);
+            var htmlContent = ProcessMarkdownContent(markdownBody, relativeFolder);
 
             return new FullArticle
             {
@@ -130,6 +89,54 @@ public class ProjectService : IProjectService
             };
         }
         catch { return null; }
+    }
+
+    internal string ProcessThumbnailPath(string thumbnail, string relativeFolder)
+    {
+        // Check specifically for the old absolute format
+        if (thumbnail.StartsWith("/projects/"))
+        {
+            return thumbnail.Replace("/projects/", "/api/projects/asset/");
+        }
+        // Check specifically for "naked" filenames (no slash, no http)
+        else if (!thumbnail.Contains("/") && !thumbnail.StartsWith("http"))
+        {
+            return $"/api/projects/asset/{relativeFolder}/{thumbnail}";
+        }
+        // (If it already starts with /api/ or http, we leave it alone)
+        return thumbnail;
+    }
+
+    internal string ProcessMarkdownContent(string markdownBody, string relativeFolder)
+    {
+        // Initial cleanup
+        var cleanMarkdown = markdownBody.Replace(".md)", ".html)");
+
+        // Fix naked images in markdown
+        cleanMarkdown = FixNakedImagePaths(cleanMarkdown, relativeFolder);
+
+        // Minify HTML footer
+        cleanMarkdown = MinifyHtmlFooter(cleanMarkdown);
+
+        return Markdown.ToHtml(cleanMarkdown, _markdownPipeline);
+    }
+
+    internal string FixNakedImagePaths(string markdown, string relativeFolder)
+    {
+        string imgPattern = @"(!\[.*?\]\()(?!(http|/))(.*?)(\))";
+        return Regex.Replace(markdown, imgPattern, m =>
+        {
+            var prefix = m.Groups[1].Value;
+            var filename = m.Groups[3].Value;
+            var suffix = m.Groups[4].Value;
+            return $"{prefix}/api/projects/asset/{relativeFolder}/{filename}{suffix}";
+        });
+    }
+
+    internal string MinifyHtmlFooter(string markdown)
+    {
+        string footerPattern = @"(?<=>)\s*\n\s*(?=<)";
+        return Regex.Replace(markdown, footerPattern, "");
     }
 
     public async Task<PagedProjectResult> GetPagedProjectsAsync(int page, int pageSize)

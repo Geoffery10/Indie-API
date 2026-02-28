@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using IndieAPI.Api.Interfaces;
 using IndieAPI.Api.Models;
+using IndieAPI.Api.Services;
+using Xunit;
 
 namespace IndieAPI.Tests;
 
@@ -53,5 +55,108 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.NotNull(data);
         Assert.Single(data.Articles);
         Assert.Equal("Stoat Sync", data.Articles.First().Title);
+    }
+
+    [Fact]
+    public void ProcessThumbnailPath_HandlesOldAbsoluteFormat()
+    {
+        // Arrange
+        var service = new ProjectService(null!, null!);
+        var input = "/projects/image.png";
+        var expected = "/api/projects/asset/image.png";
+
+        // Act
+        var result = service.ProcessThumbnailPath(input, "folder");
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ProcessThumbnailPath_HandlesNakedFilenames()
+    {
+        // Arrange
+        var service = new ProjectService(null!, null!);
+        var input = "image.png";
+        var expected = "/api/projects/asset/test-folder/image.png";
+
+        // Act
+        var result = service.ProcessThumbnailPath(input, "test-folder");
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ProcessThumbnailPath_LeavesHttpUrlsUntouched()
+    {
+        // Arrange
+        var service = new ProjectService(null!, null!);
+        var input = "https://example.com/image.png";
+
+        // Act
+        var result = service.ProcessThumbnailPath(input, "folder");
+
+        // Assert
+        Assert.Equal(input, result);
+    }
+
+    [Fact]
+    public void FixNakedImagePaths_TransformsRelativePaths()
+    {
+        // Arrange
+        var service = new ProjectService(null!, null!);
+        var input = "![Alt](image.png)";
+        var expected = "![Alt](/api/projects/asset/test-folder/image.png)";
+
+        // Act
+        var result = service.FixNakedImagePaths(input, "test-folder");
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void FixNakedImagePaths_LeavesHttpUrlsUntouched()
+    {
+        // Arrange
+        var service = new ProjectService(null!, null!);
+        var input = "![Alt](https://example.com/image.png)";
+
+        // Act
+        var result = service.FixNakedImagePaths(input, "folder");
+
+        // Assert
+        Assert.Equal(input, result);
+    }
+
+    [Fact]
+    public void MinifyHtmlFooter_RemovesNewlinesBetweenTags()
+    {
+        // Arrange
+        var service = new ProjectService(null!, null!);
+        var input = "<img>\n<a>";
+        var expected = "<img><a>";
+
+        // Act
+        var result = service.MinifyHtmlFooter(input);
+
+        // Assert
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ProcessMarkdownContent_IntegratesAllTransformations()
+    {
+        // Arrange
+        var service = new ProjectService(null!, null!);
+        var input = "![Alt](image.png)\n<img>\n<a>";
+
+        // Act
+        var result = service.ProcessMarkdownContent(input, "test-folder");
+
+        // Assert
+        Assert.Contains("/api/projects/asset/test-folder/image.png", result);
+        Assert.Contains("<img><a>", result);
     }
 }
