@@ -79,36 +79,47 @@ public class ProjectService : IProjectService
             var markdownBody = parts[1].Trim();
             var frontmatter = _yamlDeserializer.Deserialize<ArticleFrontmatter>(yamlContent);
 
-            // --- SMART PATH RESOLUTION ---
-            
-            // 1. Handle Thumbnail: If it's just "stoat.jpg", prepend the asset path
+            // --- 1. HANDLE THUMBNAIL PATH ---
             var thumbnail = frontmatter.Thumbnail;
-            if (!thumbnail.StartsWith("http") && !thumbnail.StartsWith("/"))
+
+            if (thumbnail.StartsWith("/projects/"))
             {
+                // If it's an old-style absolute path, convert it once
+                thumbnail = thumbnail.Replace("/projects/", "/api/projects/asset/");
+            }
+            else if (!thumbnail.StartsWith("http") && !thumbnail.StartsWith("/"))
+            {
+                // If it's a "naked" filename, prepend the folder path
                 thumbnail = $"/api/projects/asset/{relativeFolder}/{thumbnail}";
             }
-            // (Fallback for your legacy long paths)
-            thumbnail = thumbnail.Replace("/projects/", "/api/projects/asset/");
 
-            // 2. Handle Markdown Links (.md -> .html)
+            // --- 2. HANDLE MARKDOWN BODY ---
+            
+            // Convert .md links to .html
             var cleanMarkdown = markdownBody.Replace(".md)", ".html)");
 
-            // 3. REGEX MAGIC: Find standard markdown images like ![Alt](image.png)
-            // It looks for ]( ... ) where the link does NOT start with http or /
+            // REGEX: Find standard markdown images like ![Alt](image.png)
+            // This pattern ignores links starting with http or /
             string pattern = @"(!\[.*?\]\()(?!(http|/))(.*?)(\))";
             
-            // Replaces "](image.png)" with "](/api/projects/asset/2026/Folder/image.png)"
             cleanMarkdown = Regex.Replace(cleanMarkdown, pattern, m => 
             {
-                var prefix = m.Groups[1].Value; // "![Alt]("
+                var prefix = m.Groups[1].Value;  // "![Alt]("
                 var filename = m.Groups[3].Value; // "image.png"
-                var suffix = m.Groups[4].Value; // ")"
+                var suffix = m.Groups[4].Value;   // ")"
                 return $"{prefix}/api/projects/asset/{relativeFolder}/{filename}{suffix}";
             });
 
-            // 4. (Legacy Support) Handle any remaining absolute paths you might have typed manually
-            cleanMarkdown = cleanMarkdown.Replace("](/projects/", "](/api/projects/asset/");
-            cleanMarkdown = cleanMarkdown.Replace("src=\"/projects/", "src=\"/api/projects/asset/");
+            // LEGACY CLEANUP: Only replace /projects/ if it hasn't been turned into /api/ yet
+            // We do a specific check to avoid the double-append
+            if (cleanMarkdown.Contains("](/projects/"))
+            {
+                cleanMarkdown = cleanMarkdown.Replace("](/projects/", "](/api/projects/asset/");
+            }
+            if (cleanMarkdown.Contains("src=\"/projects/"))
+            {
+                cleanMarkdown = cleanMarkdown.Replace("src=\"/projects/", "src=\"/api/projects/asset/");
+            }
 
             var htmlContent = Markdown.ToHtml(cleanMarkdown, _markdownPipeline);
 
