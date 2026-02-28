@@ -50,15 +50,11 @@ public class ProjectService : IProjectService
 
         foreach (var file in files)
         {
-            // 1. Calculate the relative folder path (e.g., "2026/Discord_to_Stoat_Migration")
-            // We need this so we know where to look for the "naked" image links
             var fileDirectory = Path.GetDirectoryName(file);
             var relativeFolder = Path.GetRelativePath(contentPath, fileDirectory!)
-                .Replace("\\", "/"); // Ensure forward slashes for URLs
+                .Replace("\\", "/"); 
 
             var fileContent = await File.ReadAllTextAsync(file);
-            
-            // 2. Pass the folder path to the parser
             var article = ParseMarkdownFile(fileContent, relativeFolder);
             
             if (article != null) newArticleList.Add(article);
@@ -79,47 +75,47 @@ public class ProjectService : IProjectService
             var markdownBody = parts[1].Trim();
             var frontmatter = _yamlDeserializer.Deserialize<ArticleFrontmatter>(yamlContent);
 
-            // --- 1. HANDLE THUMBNAIL PATH ---
+            // --- 1. HANDLE THUMBNAIL PATH (Strict Fix) ---
             var thumbnail = frontmatter.Thumbnail;
 
+            // Check specifically for the old absolute format
             if (thumbnail.StartsWith("/projects/"))
             {
-                // If it's an old-style absolute path, convert it once
                 thumbnail = thumbnail.Replace("/projects/", "/api/projects/asset/");
             }
-            else if (!thumbnail.StartsWith("http") && !thumbnail.StartsWith("/"))
+            // Check specifically for "naked" filenames (no slash, no http)
+            else if (!thumbnail.Contains("/") && !thumbnail.StartsWith("http"))
             {
-                // If it's a "naked" filename, prepend the folder path
                 thumbnail = $"/api/projects/asset/{relativeFolder}/{thumbnail}";
             }
+            // (If it already starts with /api/ or http, we leave it alone)
 
             // --- 2. HANDLE MARKDOWN BODY ---
             
-            // Convert .md links to .html
             var cleanMarkdown = markdownBody.Replace(".md)", ".html)");
 
-            // REGEX: Find standard markdown images like ![Alt](image.png)
-            // This pattern ignores links starting with http or /
-            string pattern = @"(!\[.*?\]\()(?!(http|/))(.*?)(\))";
-            
-            cleanMarkdown = Regex.Replace(cleanMarkdown, pattern, m => 
+            // REGEX 1: Fix Naked Images in Markdown
+            // Transforms ![Alt](img.png) -> ![Alt](/api/projects/asset/Folder/img.png)
+            string imgPattern = @"(!\[.*?\]\()(?!(http|/))(.*?)(\))";
+            cleanMarkdown = Regex.Replace(cleanMarkdown, imgPattern, m => 
             {
-                var prefix = m.Groups[1].Value;  // "![Alt]("
-                var filename = m.Groups[3].Value; // "image.png"
-                var suffix = m.Groups[4].Value;   // ")"
+                var prefix = m.Groups[1].Value;
+                var filename = m.Groups[3].Value;
+                var suffix = m.Groups[4].Value;
                 return $"{prefix}/api/projects/asset/{relativeFolder}/{filename}{suffix}";
             });
 
-            // LEGACY CLEANUP: Only replace /projects/ if it hasn't been turned into /api/ yet
-            // We do a specific check to avoid the double-append
+            // REGEX 2: Minify HTML Footer (The Newline Fix)
+            // Finds any newline that sits between a closing tag > and an opening tag <
+            // Example: "<img>\n<a>" becomes "<img><a>"
+            string footerPattern = @"(?<=>)\s*\n\s*(?=<)";
+            cleanMarkdown = Regex.Replace(cleanMarkdown, footerPattern, "");
+
+            // Legacy cleanup (Only runs if the string explicitly contains the old path)
             if (cleanMarkdown.Contains("](/projects/"))
-            {
                 cleanMarkdown = cleanMarkdown.Replace("](/projects/", "](/api/projects/asset/");
-            }
             if (cleanMarkdown.Contains("src=\"/projects/"))
-            {
                 cleanMarkdown = cleanMarkdown.Replace("src=\"/projects/", "src=\"/api/projects/asset/");
-            }
 
             var htmlContent = Markdown.ToHtml(cleanMarkdown, _markdownPipeline);
 
