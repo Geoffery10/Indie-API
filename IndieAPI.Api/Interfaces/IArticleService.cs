@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.Http;
 
 namespace IndieAPI.Api.Interfaces;
 
-public interface IProjectService
+public interface IArticleService
 {
-    Task<PagedProjectResult> GetPagedProjectsAsync(int page, int pageSize);
+    Task<PagedArticleResult> GetPagedProjectsAsync(int page, int pageSize);
     Task<FullArticle?> GetArticleAsync(string linkId);
     IResult GetAsset(string path); 
 }

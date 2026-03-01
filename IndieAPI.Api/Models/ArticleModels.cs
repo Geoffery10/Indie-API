@@ -27,7 +27,7 @@ public class FullArticle : ArticleSummary
 }
 
 // Paged Response Wrapper
-public class PagedProjectResult
+public class PagedArticleResult
 {
     public int TotalPages { get; set; }
     public int CurrentPage { get; set; }

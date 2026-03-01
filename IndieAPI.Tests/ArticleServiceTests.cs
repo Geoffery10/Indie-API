@@ -6,15 +6,16 @@ using Moq;
 using IndieAPI.Api.Interfaces;
 using IndieAPI.Api.Models;
 using IndieAPI.Api.Services;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace IndieAPI.Tests;
 
-public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
+public class ArticleServiceTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly WebApplicationFactory<Program> _factory;
 
-    public ProjectTests(WebApplicationFactory<Program> factory)
+    public ArticleServiceTests(WebApplicationFactory<Program> factory)
     {
         _factory = factory;
     }
@@ -23,8 +24,8 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public async Task GetProjects_ReturnsPagedData()
     {
         // Arrange
-        var mockService = new Mock<IProjectService>();
-        var fakeResult = new PagedProjectResult
+        var mockService = new Mock<IArticleService>();
+        var fakeResult = new PagedArticleResult
         {
             CurrentPage = 1,
             TotalPages = 1,
@@ -40,9 +41,8 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
         {
             builder.ConfigureServices(services =>
             {
-                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(IProjectService));
-                if (descriptor != null) services.Remove(descriptor);
-                services.AddSingleton(mockService.Object);
+                services.RemoveAllKeyed<IArticleService>("projects");
+                services.AddKeyedSingleton("projects", mockService.Object);
             });
         }).CreateClient();
 
@@ -51,7 +51,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
 
         // Assert
         response.EnsureSuccessStatusCode();
-        var data = await response.Content.ReadFromJsonAsync<PagedProjectResult>();
+        var data = await response.Content.ReadFromJsonAsync<PagedArticleResult>();
         Assert.NotNull(data);
         Assert.Single(data.Articles);
         Assert.Equal("Stoat Sync", data.Articles.First().Title);
@@ -61,7 +61,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public void ProcessThumbnailPath_HandlesOldAbsoluteFormat()
     {
         // Arrange
-        var service = new ProjectService(null!, null!);
+        var service = new ArticleService(null!, null!, "Projects", "projects");
         var input = "/projects/image.png";
         var expected = "/api/projects/asset/image.png";
 
@@ -76,7 +76,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public void ProcessThumbnailPath_HandlesNakedFilenames()
     {
         // Arrange
-        var service = new ProjectService(null!, null!);
+        var service = new ArticleService(null!, null!, "Projects", "projects");
         var input = "image.png";
         var expected = "/api/projects/asset/test-folder/image.png";
 
@@ -91,7 +91,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public void ProcessThumbnailPath_LeavesHttpUrlsUntouched()
     {
         // Arrange
-        var service = new ProjectService(null!, null!);
+        var service = new ArticleService(null!, null!, "Projects", "projects");
         var input = "https://example.com/image.png";
 
         // Act
@@ -105,7 +105,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public void FixNakedImagePaths_TransformsRelativePaths()
     {
         // Arrange
-        var service = new ProjectService(null!, null!);
+        var service = new ArticleService(null!, null!, "Projects", "projects");
         var input = "![Alt](image.png)";
         var expected = "![Alt](/api/projects/asset/test-folder/image.png)";
 
@@ -120,7 +120,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public void FixNakedImagePaths_LeavesHttpUrlsUntouched()
     {
         // Arrange
-        var service = new ProjectService(null!, null!);
+        var service = new ArticleService(null!, null!, "Projects", "projects");
         var input = "![Alt](https://example.com/image.png)";
 
         // Act
@@ -134,7 +134,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public void MinifyHtmlFooter_RemovesNewlinesBetweenTags()
     {
         // Arrange
-        var service = new ProjectService(null!, null!);
+        var service = new ArticleService(null!, null!, "Projects", "projects");
         var input = "<img>\n<a>";
         var expected = "<img><a>";
 
@@ -149,7 +149,7 @@ public class ProjectTests : IClassFixture<WebApplicationFactory<Program>>
     public void ProcessMarkdownContent_IntegratesAllTransformations()
     {
         // Arrange
-        var service = new ProjectService(null!, null!);
+        var service = new ArticleService(null!, null!, "Projects", "projects");
         var input = "![Alt](image.png)\n<img>\n<a>";
 
         // Act

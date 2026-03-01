@@ -31,7 +31,19 @@ builder.Services.AddHttpClient<IHomeAssistantService, HomeAssistantService>(clie
     if (!string.IsNullOrEmpty(haToken)) client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", haToken);
 });
 
-builder.Services.AddSingleton<IProjectService, ProjectService>();
+builder.Services.AddKeyedSingleton<IArticleService, ArticleService>("projects", (sp, key) =>
+{
+    var env = sp.GetRequiredService<IWebHostEnvironment>();
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new ArticleService(env, config, "Projects", "projects");
+});
+
+builder.Services.AddKeyedSingleton<IArticleService, ArticleService>("blogs", (sp, key) =>
+{
+    var env = sp.GetRequiredService<IWebHostEnvironment>();
+    var config = sp.GetRequiredService<IConfiguration>();
+    return new ArticleService(env, config, "Blogs", "blogs");
+});
 
 builder.Services.AddCors(options =>
 {
@@ -58,5 +70,6 @@ app.MapGet("/api/health", () => Results.Ok(new { Status = "Healthy" }));
 app.MapBibleEndpoints();
 app.MapArtEndpoints();
 app.MapProjectEndpoints();
+app.MapBlogEndpoints();
 
 app.Run();

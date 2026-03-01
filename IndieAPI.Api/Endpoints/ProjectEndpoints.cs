@@ -9,13 +9,13 @@ public static class ProjectEndpoints
     {
         var group = app.MapGroup("/api/projects");
 
-        group.MapGet("/", async (IProjectService projectService, [FromQuery] int page = 1,[FromQuery] int pageSize = 3) =>
+        group.MapGet("/", async ([FromKeyedServices("projects")] IArticleService projectService, [FromQuery] int page = 1,[FromQuery] int pageSize = 3) =>
         {
             var result = await projectService.GetPagedProjectsAsync(page, pageSize);
             return Results.Ok(result);
         });
 
-        group.MapGet("/article", async (IProjectService projectService, [FromQuery] string id) =>
+        group.MapGet("/article", async ([FromKeyedServices("projects")] IArticleService projectService, [FromQuery] string id) =>
         {
             var article = await projectService.GetArticleAsync(id);
             if (article == null) return Results.NotFound(new { Message = "Article not found." });
@@ -25,7 +25,7 @@ public static class ProjectEndpoints
 
         // NEW: The Asset Streamer
         // The {**path} is a catch-all route parameter that allows slashes in the URL
-        group.MapGet("/asset/{**path}", (IProjectService projectService, string path) =>
+        group.MapGet("/asset/{**path}", ([FromKeyedServices("projects")] IArticleService projectService, string path) =>
         {
             return projectService.GetAsset(path);
         });

@@ -7,8 +7,10 @@ using System.Text.RegularExpressions;
 
 namespace IndieAPI.Api.Services;
 
-public class ProjectService : IProjectService
+public class ArticleService : IArticleService
 {
+    private readonly string _contentDirectory;
+    private readonly string _routePrefix;
     private readonly IWebHostEnvironment _env;
     private readonly IConfiguration _config;
     private List<FullArticle>? _cachedArticles;
@@ -17,8 +19,10 @@ public class ProjectService : IProjectService
     private readonly IDeserializer _yamlDeserializer;
     private readonly MarkdownPipeline _markdownPipeline;
 
-    public ProjectService(IWebHostEnvironment env, IConfiguration config)
+    public ArticleService(IWebHostEnvironment env, IConfiguration config, string contentDirectory, string routePrefix)
     {
+        _contentDirectory = contentDirectory;
+        _routePrefix = routePrefix;
         _env = env;
         _config = config;
         _yamlDeserializer = new DeserializerBuilder()
@@ -30,11 +34,11 @@ public class ProjectService : IProjectService
             .Build();
     }
 
-    private string GetProjectsRoot()
+    private string GetArticlesRoot()
     {
-        var customPath = _config["Projects:Directory"];
+        var customPath = _config[$"{_contentDirectory}:Directory"];
         if (!string.IsNullOrEmpty(customPath)) return customPath;
-        return Path.Combine(_env.ContentRootPath, "Data", "Projects");
+        return Path.Combine(_env.ContentRootPath, "Data", _contentDirectory);
     }
 
     private async Task EnsureArticlesLoadedAsync()
@@ -42,9 +46,14 @@ public class ProjectService : IProjectService
         if (_cachedArticles != null && (DateTime.UtcNow - _lastCacheUpdate) < _cacheDuration) return;
 
         var newArticleList = new List<FullArticle>();
-        var contentPath = GetProjectsRoot();
+        var contentPath = GetArticlesRoot();
 
-        if (!Directory.Exists(contentPath)) return;
+        if (!Directory.Exists(contentPath)) 
+        {
+            _cachedArticles = newArticleList;
+            _lastCacheUpdate = DateTime.UtcNow;
+            return;
+        }
 
         var files = Directory.GetFiles(contentPath, "*.md", SearchOption.AllDirectories);
 
@@ -94,14 +103,14 @@ public class ProjectService : IProjectService
     internal string ProcessThumbnailPath(string thumbnail, string relativeFolder)
     {
         // Check specifically for the old absolute format
-        if (thumbnail.StartsWith("/projects/"))
+        if (thumbnail.StartsWith($"/{_routePrefix}/"))
         {
-            return thumbnail.Replace("/projects/", "/api/projects/asset/");
+            return thumbnail.Replace($"/{_routePrefix}/", $"/api/{_routePrefix}/asset/");
         }
         // Check specifically for "naked" filenames (no slash, no http)
         else if (!thumbnail.Contains("/") && !thumbnail.StartsWith("http"))
         {
-            return $"/api/projects/asset/{relativeFolder}/{thumbnail}";
+            return $"/api/{_routePrefix}/asset/{relativeFolder}/{thumbnail}";
         }
         // (If it already starts with /api/ or http, we leave it alone)
         return thumbnail;
@@ -129,7 +138,7 @@ public class ProjectService : IProjectService
             var prefix = m.Groups[1].Value;
             var filename = m.Groups[3].Value;
             var suffix = m.Groups[4].Value;
-            return $"{prefix}/api/projects/asset/{relativeFolder}/{filename}{suffix}";
+            return $"{prefix}/api/{_routePrefix}/asset/{relativeFolder}/{filename}{suffix}";
         });
     }
 
@@ -139,14 +148,14 @@ public class ProjectService : IProjectService
         return Regex.Replace(markdown, footerPattern, "");
     }
 
-    public async Task<PagedProjectResult> GetPagedProjectsAsync(int page, int pageSize)
+    public async Task<PagedArticleResult> GetPagedProjectsAsync(int page, int pageSize)
     {
         await EnsureArticlesLoadedAsync();
         var totalArticles = _cachedArticles!.Count;
         var totalPages = (int)Math.Ceiling((double)totalArticles / pageSize);
         var pagedData = _cachedArticles!.Skip((page - 1) * pageSize).Take(pageSize)
             .Select(a => new ArticleSummary { Title = a.Title, Description = a.Description, Thumbnail = a.Thumbnail, Date = a.Date, Link = a.Link });
-        return new PagedProjectResult { CurrentPage = page, TotalPages = totalPages, Articles = pagedData };
+        return new PagedArticleResult { CurrentPage = page, TotalPages = totalPages, Articles = pagedData };
     }
 
     public async Task<FullArticle?> GetArticleAsync(string linkId)
@@ -157,7 +166,7 @@ public class ProjectService : IProjectService
 
     public IResult GetAsset(string path)
     {
-        var rootDir = GetProjectsRoot();
+        var rootDir = GetArticlesRoot();
         var physicalPath = Path.Combine(rootDir, path);
         
         if (!File.Exists(physicalPath)) return Results.NotFound();
