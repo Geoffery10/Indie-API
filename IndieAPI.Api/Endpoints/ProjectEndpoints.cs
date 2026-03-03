@@ -39,6 +39,6 @@ public static class ProjectEndpoints
                 "https://indie.geoffery10.com/projects",
                 link => $"https://indie.geoffery10.com/view-project.html?id={Uri.EscapeDataString(link)}"
             );
-        });
+        }).RequireCors("AllowAnyOrigin");
     }
 }

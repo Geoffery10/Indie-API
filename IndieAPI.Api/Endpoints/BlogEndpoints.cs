@@ -37,6 +37,6 @@ public static class BlogEndpoints
                 "https://indie.geoffery10.com/blog",
                 link => $"https://indie.geoffery10.com/view-blog.html?id={Uri.EscapeDataString(link)}"
             );
-        });
+        }).RequireCors("AllowAnyOrigin");
     }
 }
