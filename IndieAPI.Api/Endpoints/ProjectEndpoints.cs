@@ -37,7 +37,7 @@ public static class ProjectEndpoints
                 "Geoffery10 Projects",
                 "Latest projects from Geoffery10",
                 "https://indie.geoffery10.com/projects",
-                "https://indie.geoffery10.com/project"
+                link => $"https://indie.geoffery10.com/view-project.html?id={Uri.EscapeDataString(link)}"
             );
         });
     }

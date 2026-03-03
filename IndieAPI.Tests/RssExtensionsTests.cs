@@ -35,10 +35,10 @@ public class RssExtensionsTests
         var feedTitle = "My Web Feed";
         var feedDescription = "Feed for testing";
         var feedAlternativeUrl = "https://example.com/feed";
-        var itemUrlPrefix = "https://example.com/articles/";
+        Func<string, string> itemUrlBuilder = link => $"https://example.com/articles/{link}";
 
         // Act
-        var result = articles.GenerateRssFeed(feedTitle, feedDescription, feedAlternativeUrl, itemUrlPrefix);
+        var result = articles.GenerateRssFeed(feedTitle, feedDescription, feedAlternativeUrl, itemUrlBuilder);
 
         // Assert
         Assert.NotNull(result);
@@ -83,7 +83,7 @@ public class RssExtensionsTests
         var articles = new List<ArticleSummary>();
 
         // Act
-        var result = articles.GenerateRssFeed("Empty Feed", "No articles", "https://example.com", "https://example.com/item/");
+        var result = articles.GenerateRssFeed("Empty Feed", "No articles", "https://example.com", link => $"https://example.com/item/{link}");
 
         // Assert
         var services = new ServiceCollection();
@@ -105,7 +105,7 @@ public class RssExtensionsTests
     }
     
     [Fact]
-    public async Task GenerateRssFeed_WithoutTrailingSlashInItemUrlPrefix_ShouldConstructCorrectLinks()
+    public async Task GenerateRssFeed_WithItemUrlBuilder_ShouldConstructCorrectLinks()
     {
         // Arrange
         var articles = new List<ArticleSummary>
@@ -119,11 +119,10 @@ public class RssExtensionsTests
             }
         };
 
-        // Prefix WITHOUT trailing slash
-        var itemUrlPrefix = "https://example.com/articles"; 
+        Func<string, string> itemUrlBuilder = link => $"https://example.com/articles/{link}";
 
         // Act
-        var result = articles.GenerateRssFeed("Feed", "Desc", "https://example.com", itemUrlPrefix);
+        var result = articles.GenerateRssFeed("Feed", "Desc", "https://example.com", itemUrlBuilder);
 
         // Assert
         var services = new ServiceCollection();

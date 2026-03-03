@@ -35,7 +35,7 @@ public static class BlogEndpoints
                 "Geoffery10 Blog",
                 "Latest blog posts from Geoffery10",
                 "https://indie.geoffery10.com/blog",
-                "https://indie.geoffery10.com/blog"
+                link => $"https://indie.geoffery10.com/view-blog.html?id={Uri.EscapeDataString(link)}"
             );
         });
     }
