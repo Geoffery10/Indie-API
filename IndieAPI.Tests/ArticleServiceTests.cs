@@ -159,4 +159,76 @@ public class ArticleServiceTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Contains("/api/projects/asset/test-folder/image.png", result);
         Assert.Contains("<img><a>", result);
     }
+
+    [Fact]
+    public async Task GetProjectsRssFeed_ReturnsValidXml()
+    {
+        // Arrange
+        var mockService = new Mock<IArticleService>();
+        var fakeResult = new PagedArticleResult
+        {
+            CurrentPage = 1,
+            TotalPages = 1,
+            Articles = new List<ArticleSummary>
+            {
+                new ArticleSummary { Title = "Stoat Sync", Link = "/projects/2026/Stoat-Sync/project.md" }
+            }
+        };
+
+        mockService.Setup(s => s.GetPagedProjectsAsync(1, 20)).ReturnsAsync(fakeResult);
+
+        var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAllKeyed<IArticleService>("projects");
+                services.AddKeyedSingleton("projects", mockService.Object);
+            });
+        }).CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/api/projects/rss");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/rss+xml", response.Content.Headers.ContentType?.MediaType);
+        var xmlString = await response.Content.ReadAsStringAsync();
+        Assert.Contains("<title>Stoat Sync</title>", xmlString);
+    }
+
+    [Fact]
+    public async Task GetBlogsRssFeed_ReturnsValidXml()
+    {
+        // Arrange
+        var mockService = new Mock<IArticleService>();
+        var fakeResult = new PagedArticleResult
+        {
+            CurrentPage = 1,
+            TotalPages = 1,
+            Articles = new List<ArticleSummary>
+            {
+                new ArticleSummary { Title = "First Blog", Link = "/blog/2026/First-Blog/blog.md" }
+            }
+        };
+
+        mockService.Setup(s => s.GetPagedProjectsAsync(1, 20)).ReturnsAsync(fakeResult);
+
+        var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAllKeyed<IArticleService>("blogs");
+                services.AddKeyedSingleton("blogs", mockService.Object);
+            });
+        }).CreateClient();
+
+        // Act
+        var response = await client.GetAsync("/api/blogs/rss");
+
+        // Assert
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("application/rss+xml", response.Content.Headers.ContentType?.MediaType);
+        var xmlString = await response.Content.ReadAsStringAsync();
+        Assert.Contains("<title>First Blog</title>", xmlString);
+    }
 }

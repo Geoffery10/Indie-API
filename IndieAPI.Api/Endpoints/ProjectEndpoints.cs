@@ -29,5 +29,16 @@ public static class ProjectEndpoints
         {
             return projectService.GetAsset(path);
         });
+
+        group.MapGet("/rss", async ([FromKeyedServices("projects")] IArticleService projectService) =>
+        {
+            var result = await projectService.GetPagedProjectsAsync(1, 20);
+            return result.Articles.GenerateRssFeed(
+                "Geoffery10 Projects",
+                "Latest projects from Geoffery10",
+                "https://indie.geoffery10.com/projects",
+                "https://indie.geoffery10.com/project"
+            );
+        });
     }
 }

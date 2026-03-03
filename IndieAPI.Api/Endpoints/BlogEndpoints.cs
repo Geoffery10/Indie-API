@@ -27,5 +27,16 @@ public static class BlogEndpoints
         {
             return blogService.GetAsset(path);
         });
+
+        group.MapGet("/rss", async ([FromKeyedServices("blogs")] IArticleService blogService) =>
+        {
+            var result = await blogService.GetPagedProjectsAsync(1, 20);
+            return result.Articles.GenerateRssFeed(
+                "Geoffery10 Blog",
+                "Latest blog posts from Geoffery10",
+                "https://indie.geoffery10.com/blog",
+                "https://indie.geoffery10.com/blog"
+            );
+        });
     }
 }
