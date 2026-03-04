@@ -50,10 +50,13 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowIndieFrontend", policy =>
     {
         policy.WithOrigins(
-                "https://indie.geoffery10.com", 
-                "http://localhost:5500", 
-                "http://127.0.0.1:5500"
+                "https://indie.geoffery10.com"
               )
+                .SetIsOriginAllowed(origin => {
+                    var uri = new Uri(origin);
+                    return (uri.Host == "localhost" || uri.Host == "127.0.0.1" || uri.Host == "indie.geoffery10.com") &&
+                           (uri.Scheme == "http" || uri.Scheme == "https");
+                })
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
