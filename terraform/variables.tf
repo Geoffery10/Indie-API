@@ -32,3 +32,20 @@ variable "container_ssh_public_keys" {
   type        = list(string)
   default     = []
 }
+
+variable "ghcr_username" {
+  description = "The GitHub username for GHCR"
+  type        = string
+}
+
+variable "ghcr_pat" {
+  description = "The Personal Access Token for GHCR"
+  type        = string
+  sensitive   = true
+}
+
+variable "APP_ENV_FILE" {
+  description = "The content of the .env file for the application"
+  type        = string
+  sensitive   = true
+}
