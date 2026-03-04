@@ -18,6 +18,7 @@ public class ArticleSummary
     public string Thumbnail { get; set; } = string.Empty;
     public DateTime Date { get; set; }
     public string Link { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
 }
 
 // What we return for the actual Project Page

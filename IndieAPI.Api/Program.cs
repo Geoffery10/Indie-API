@@ -78,5 +78,6 @@ app.MapBibleEndpoints();
 app.MapArtEndpoints();
 app.MapProjectEndpoints();
 app.MapBlogEndpoints();
+app.MapArticleEndpoints();
 
 app.Run();

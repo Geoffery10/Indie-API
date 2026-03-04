@@ -8,7 +8,7 @@ namespace IndieAPI.Api.Endpoints;
 
 public static class RssExtensions
 {
-    public static IResult GenerateRssFeed(this IEnumerable<ArticleSummary> articles, string feedTitle, string feedDescription, string feedAlternativeUrl, Func<string, string> itemUrlBuilder)
+    public static IResult GenerateRssFeed(this IEnumerable<ArticleSummary> articles, string feedTitle, string feedDescription, string feedAlternativeUrl, Func<ArticleSummary, string> itemUrlBuilder)
     {
         var feed = new SyndicationFeed(feedTitle, feedDescription, new Uri(feedAlternativeUrl))
         {
@@ -19,7 +19,7 @@ public static class RssExtensions
         
         foreach (var article in articles)
         {
-            var itemUrl = itemUrlBuilder(article.Link);
+            var itemUrl = itemUrlBuilder(article);
             var item = new SyndicationItem(
                 article.Title,
                 article.Description,

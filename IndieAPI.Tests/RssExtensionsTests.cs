@@ -35,7 +35,7 @@ public class RssExtensionsTests
         var feedTitle = "My Web Feed";
         var feedDescription = "Feed for testing";
         var feedAlternativeUrl = "https://example.com/feed";
-        Func<string, string> itemUrlBuilder = link => $"https://example.com/articles/{link}";
+        Func<ArticleSummary, string> itemUrlBuilder = article => $"https://example.com/articles/{article.Link}";
 
         // Act
         var result = articles.GenerateRssFeed(feedTitle, feedDescription, feedAlternativeUrl, itemUrlBuilder);
@@ -83,7 +83,7 @@ public class RssExtensionsTests
         var articles = new List<ArticleSummary>();
 
         // Act
-        var result = articles.GenerateRssFeed("Empty Feed", "No articles", "https://example.com", link => $"https://example.com/item/{link}");
+        var result = articles.GenerateRssFeed("Empty Feed", "No articles", "https://example.com", article => $"https://example.com/item/{article.Link}");
 
         // Assert
         var services = new ServiceCollection();
@@ -119,7 +119,7 @@ public class RssExtensionsTests
             }
         };
 
-        Func<string, string> itemUrlBuilder = link => $"https://example.com/articles/{link}";
+        Func<ArticleSummary, string> itemUrlBuilder = article => $"https://example.com/articles/{article.Link}";
 
         // Act
         var result = articles.GenerateRssFeed("Feed", "Desc", "https://example.com", itemUrlBuilder);

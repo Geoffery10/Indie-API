@@ -154,7 +154,7 @@ public class ArticleService : IArticleService
         var totalArticles = _cachedArticles!.Count;
         var totalPages = (int)Math.Ceiling((double)totalArticles / pageSize);
         var pagedData = _cachedArticles!.Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(a => new ArticleSummary { Title = a.Title, Description = a.Description, Thumbnail = a.Thumbnail, Date = a.Date, Link = a.Link });
+            .Select(a => new ArticleSummary { Title = a.Title, Description = a.Description, Thumbnail = a.Thumbnail, Date = a.Date, Link = a.Link, Category = _routePrefix });
         return new PagedArticleResult { CurrentPage = page, TotalPages = totalPages, Articles = pagedData };
     }
 

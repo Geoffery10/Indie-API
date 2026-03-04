@@ -161,74 +161,68 @@ public class ArticleServiceTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
-    public async Task GetProjectsRssFeed_ReturnsValidXml()
+    public async Task GetCombinedRssFeed_ReturnsValidXml()
     {
         // Arrange
-        var mockService = new Mock<IArticleService>();
-        var fakeResult = new PagedArticleResult
+        var mockProjectService = new Mock<IArticleService>();
+        var projectArticles = new PagedArticleResult
         {
             CurrentPage = 1,
             TotalPages = 1,
             Articles = new List<ArticleSummary>
             {
-                new ArticleSummary { Title = "Stoat Sync", Link = "/projects/2026/Stoat-Sync/project.md" }
+                new ArticleSummary { Title = "Project 1", Link = "p1", Category = "projects", Date = DateTime.UtcNow }
             }
         };
 
-        mockService.Setup(s => s.GetPagedProjectsAsync(1, 20)).ReturnsAsync(fakeResult);
+        var mockBlogService = new Mock<IArticleService>();
+        var blogArticles = new PagedArticleResult
+        {
+            CurrentPage = 1,
+            TotalPages = 1,
+            Articles = new List<ArticleSummary>
+            {
+                new ArticleSummary { Title = "Blog 1", Link = "b1", Category = "blogs", Date = DateTime.UtcNow.AddHours(-1) }
+            }
+        };
+
+        mockProjectService.Setup(s => s.GetPagedProjectsAsync(1, 25)).ReturnsAsync(projectArticles);
+        mockBlogService.Setup(s => s.GetPagedProjectsAsync(1, 25)).ReturnsAsync(blogArticles);
 
         var client = _factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureServices(services =>
             {
                 services.RemoveAllKeyed<IArticleService>("projects");
-                services.AddKeyedSingleton("projects", mockService.Object);
+                services.AddKeyedSingleton("projects", mockProjectService.Object);
+                services.RemoveAllKeyed<IArticleService>("blogs");
+                services.AddKeyedSingleton("blogs", mockBlogService.Object);
             });
         }).CreateClient();
 
         // Act
-        var response = await client.GetAsync("/api/projects/rss");
+        var response = await client.GetAsync("/api/articles/rss");
 
         // Assert
         response.EnsureSuccessStatusCode();
         Assert.Equal("application/rss+xml", response.Content.Headers.ContentType?.MediaType);
         var xmlString = await response.Content.ReadAsStringAsync();
-        Assert.Contains("<title>Stoat Sync</title>", xmlString);
+        Assert.Contains("<title>Project 1</title>", xmlString);
+        Assert.Contains("<title>Blog 1</title>", xmlString);
+        Assert.Contains("view-project.html?id=p1", xmlString);
+        Assert.Contains("view-blog.html?id=b1", xmlString);
     }
 
     [Fact]
-    public async Task GetBlogsRssFeed_ReturnsValidXml()
+    public async Task OldRssEndpoints_ReturnNotFound()
     {
-        // Arrange
-        var mockService = new Mock<IArticleService>();
-        var fakeResult = new PagedArticleResult
-        {
-            CurrentPage = 1,
-            TotalPages = 1,
-            Articles = new List<ArticleSummary>
-            {
-                new ArticleSummary { Title = "First Blog", Link = "/blog/2026/First-Blog/blog.md" }
-            }
-        };
-
-        mockService.Setup(s => s.GetPagedProjectsAsync(1, 20)).ReturnsAsync(fakeResult);
-
-        var client = _factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureServices(services =>
-            {
-                services.RemoveAllKeyed<IArticleService>("blogs");
-                services.AddKeyedSingleton("blogs", mockService.Object);
-            });
-        }).CreateClient();
-
         // Act
-        var response = await client.GetAsync("/api/blogs/rss");
+        var client = _factory.CreateClient();
+        var projectsResponse = await client.GetAsync("/api/projects/rss");
+        var blogsResponse = await client.GetAsync("/api/blogs/rss");
 
         // Assert
-        response.EnsureSuccessStatusCode();
-        Assert.Equal("application/rss+xml", response.Content.Headers.ContentType?.MediaType);
-        var xmlString = await response.Content.ReadAsStringAsync();
-        Assert.Contains("<title>First Blog</title>", xmlString);
+        Assert.Equal(HttpStatusCode.NotFound, projectsResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, blogsResponse.StatusCode);
     }
 }
