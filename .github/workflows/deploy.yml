@@ -18,7 +18,7 @@ jobs:
     - name: Build
       run: dotnet build --no-restore
     - name: Test
-      run: dotnet test IndieAPI.Tests/IndieAPI.Tests.csproj --no-build --verbosity normal
+      run: dotnet test backend/IndieAPI.Tests/IndieAPI.Tests.csproj --no-build --verbosity normal
 
   build-and-push:
     needs: test
@@ -50,7 +50,7 @@ jobs:
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: .
+        context: ./backend
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
