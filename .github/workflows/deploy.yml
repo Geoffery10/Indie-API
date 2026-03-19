@@ -3,6 +3,9 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'IndieAPI.Api/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   test:
