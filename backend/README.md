@@ -1,6 +1,7 @@
 # Indie API
 
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/Geoffery10/Indie-API/tests.yml?label=tests) ![Coveralls](https://img.shields.io/coverallsCoverage/github/Geoffery10/Indie-API)
+ 
 
 
 A straightforward backend API built with ASP.NET Core that powers [indie.geoffery10.com](https://indie.geoffery10.com) and provides content down to the frontend.
