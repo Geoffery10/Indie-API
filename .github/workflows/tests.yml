@@ -29,12 +29,7 @@ jobs:
 
     - name: Test
       run: |
-        dotnet test IndieAPI.Tests/IndieAPI.Tests.csproj \
-        --no-build \
-        --verbosity normal \
-        /p:CollectCoverage=true \
-        /p:CoverletOutputFormat=lcov \
-        /p:CoverletOutput=../../coverage/lcov.info
+        dotnet test IndieAPI.Tests/IndieAPI.Tests.csproj /p:CollectCoverage=true /p:CoverletOutputFormat=lcov
 
     - name: Upload coverage reports to Coveralls
       if: ${{ matrix.dotnet-version == '11.0.x' }} # Adapted from your snippet to match .NET version
@@ -42,4 +37,4 @@ jobs:
       uses: coverallsapp/github-action@v2
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
-        path-to-lcov: ./coverage/lcov.info
+        path-to-lcov: ./IndieAPI.Tests/coverage.info
