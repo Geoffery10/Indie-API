@@ -11,7 +11,9 @@ public class ImmichModelsTests
     [Fact]
     public void ImmichAsset_Deserialize_ShouldPopulateAllFields()
     {
-        var json = "{\"Id\":\"asset123\",\"FileCreatedAt\":\"2023-01-02T03:04:05Z\",\"ExifImageWidth\":800,\"ExifImageHeight\":600,\"Type\":\"IMAGE\",\"OriginalMimeType\":\"image/jpeg\"}";
+        // Immich v3 returns camelCase JSON. The model uses [JsonPropertyName]
+        // attributes that map camelCase fields to PascalCase properties.
+        var json = "{\"id\":\"asset123\",\"fileCreatedAt\":\"2023-01-02T03:04:05Z\",\"exifImageWidth\":800,\"exifImageHeight\":600,\"type\":\"IMAGE\",\"originalMimeType\":\"image/jpeg\"}";
         var asset = JsonSerializer.Deserialize<ImmichAsset>(json);
         Assert.NotNull(asset);
         Assert.Equal("asset123", asset!.Id);
@@ -23,50 +25,38 @@ public class ImmichModelsTests
     }
 
     [Fact]
-    public void ImmichAlbumResponse_SerializeDeserialize_RoundTripPreservesData()
+    public void ImmichSearchResponse_Deserialize_MapsV3AlbumSearchShape()
     {
-        var album = new ImmichAlbumResponse
-        {
-            Id = "album1",
-            AlbumName = "Test Album",
-            Assets = new List<ImmichAsset>
-            {
-                new ImmichAsset
-                {
-                    Id = "a1",
-                    FileCreatedAt = new DateTime(2023,01,01,12,0,0, DateTimeKind.Utc),
-                    ExifImageWidth = 1024,
-                    ExifImageHeight = 768,
-                    Type = "IMAGE",
-                    OriginalMimeType = "image/png"
-                },
-                new ImmichAsset
-                {
-                    Id = "a2",
-                    FileCreatedAt = new DateTime(2022,12,31,8,30,0, DateTimeKind.Utc),
-                    ExifImageWidth = 640,
-                    ExifImageHeight = 480,
-                    Type = "VIDEO",
-                    OriginalMimeType = "video/mp4"
-                }
+        // The exact JSON shape Immich v3's POST /api/search/metadata returns
+        // when filtered by albumIds. The IndiE-API now relies on this shape
+        // because v3 dropped the per-album GET that embedded `assets[]`.
+        const string json = @"{
+            ""assets"": {
+                ""total"": 2,
+                ""count"": 2,
+                ""items"": [
+                    { ""id"": ""a1"", ""type"": ""IMAGE"", ""fileCreatedAt"": ""2023-01-01T12:00:00Z"", ""originalMimeType"": ""image/png"", ""exifImageWidth"": 1024, ""exifImageHeight"": 768 },
+                    { ""id"": ""a2"", ""type"": ""VIDEO"", ""fileCreatedAt"": ""2022-12-31T08:30:00Z"", ""originalMimeType"": ""video/mp4"", ""exifImageWidth"": 640, ""exifImageHeight"": 480 }
+                ]
             }
-        };
+        }";
 
-        var json = JsonSerializer.Serialize(album);
-        var deserialized = JsonSerializer.Deserialize<ImmichAlbumResponse>(json);
+        var deserialized = JsonSerializer.Deserialize<ImmichSearchResponse>(json);
         Assert.NotNull(deserialized);
-        Assert.Equal(album.Id, deserialized!.Id);
-        Assert.Equal(album.AlbumName, deserialized.AlbumName);
-        Assert.Equal(album.Assets.Count, deserialized.Assets.Count);
-        // Verify first asset fields
-        var originalFirst = album.Assets[0];
-        var roundFirst = deserialized.Assets[0];
-        Assert.Equal(originalFirst.Id, roundFirst.Id);
-        Assert.Equal(originalFirst.FileCreatedAt, roundFirst.FileCreatedAt);
-        Assert.Equal(originalFirst.ExifImageWidth, roundFirst.ExifImageWidth);
-        Assert.Equal(originalFirst.ExifImageHeight, roundFirst.ExifImageHeight);
-        Assert.Equal(originalFirst.Type, roundFirst.Type);
-        Assert.Equal(originalFirst.OriginalMimeType, roundFirst.OriginalMimeType);
+        Assert.NotNull(deserialized!.Assets);
+        Assert.Equal(2, deserialized.Assets.Total);
+        Assert.Equal(2, deserialized.Assets.Count);
+        Assert.Equal(2, deserialized.Assets.Items.Count);
+
+        Assert.Equal("a1", deserialized.Assets.Items[0].Id);
+        Assert.Equal("IMAGE", deserialized.Assets.Items[0].Type);
+        Assert.Equal(DateTime.Parse("2023-01-01T12:00:00Z").ToUniversalTime(), deserialized.Assets.Items[0].FileCreatedAt.ToUniversalTime());
+        Assert.Equal("image/png", deserialized.Assets.Items[0].OriginalMimeType);
+        Assert.Equal(1024, deserialized.Assets.Items[0].ExifImageWidth);
+        Assert.Equal(768, deserialized.Assets.Items[0].ExifImageHeight);
+
+        Assert.Equal("a2", deserialized.Assets.Items[1].Id);
+        Assert.Equal("VIDEO", deserialized.Assets.Items[1].Type);
     }
 
     [Fact]
