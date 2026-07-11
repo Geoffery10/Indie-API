@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
@@ -35,7 +37,7 @@ public class ImmichServiceTests
 
     private IConfiguration BuildConfig(params string[] albumIds)
     {
-        var dict = new Dictionary<string, string>();
+        var dict = new Dictionary<string, string?>();
         for (int i = 0; i < albumIds.Length; i++)
         {
             dict[$"Immich:AlbumIds:{i}"] = albumIds[i];
@@ -43,38 +45,51 @@ public class ImmichServiceTests
         return new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
     }
 
+    // Build the v3 /api/search/metadata response shape with the given assets.
+    private static string BuildSearchResponse(IEnumerable<ImmichAsset> items, int? totalOverride = null)
+    {
+        var list = items.ToList();
+        var resp = new ImmichSearchResponse
+        {
+            Assets = new ImmichSearchAssets
+            {
+                Total = totalOverride ?? list.Count,
+                Count = list.Count,
+                Items = list
+            }
+        };
+        return JsonSerializer.Serialize(resp);
+    }
+
     [Fact]
     public async Task GetPagedArtAsync_ReturnsSortedImages_AndRespectsPagination()
     {
-        // Arrange – two albums with various assets
-        var album1 = new ImmichAlbumResponse
+        // Arrange – two pages worth of assets across two albums.
+        // v3 collapses per-album GETs into a single POST /api/search/metadata
+        // with `albumIds` as a filter, so the fake handler answers all
+        // requests for /api/search/metadata regardless of the albumIds body.
+        // The fixture includes a VIDEO entry to prove the service-side
+        // `type=IMAGE` filter is in the request body.
+        var page1 = new List<ImmichAsset>
         {
-            Id = "album1",
-            AlbumName = "First",
-            Assets = new List<ImmichAsset>
-            {
-                new ImmichAsset { Id = "A", Type = "IMAGE", FileCreatedAt = new DateTime(2022,1,1) },
-                new ImmichAsset { Id = "V", Type = "VIDEO", FileCreatedAt = new DateTime(2023,1,1) }
-            }
+            new() { Id = "B", Type = "IMAGE", FileCreatedAt = new DateTime(2023,1,2) },
+            new() { Id = "A", Type = "IMAGE", FileCreatedAt = new DateTime(2022,1,1) },
+            new() { Id = "V", Type = "VIDEO", FileCreatedAt = new DateTime(2024,1,1) },
         };
-        var album2 = new ImmichAlbumResponse
-        {
-            Id = "album2",
-            AlbumName = "Second",
-            Assets = new List<ImmichAsset>
-            {
-                new ImmichAsset { Id = "B", Type = "IMAGE", FileCreatedAt = new DateTime(2023,1,2) }
-            }
-        };
+
+        // The service trusts the server to honour `type=IMAGE`, so the fixture
+        // represents the response after the server has already filtered.
+        var filteredForService = page1.Where(a => a.Type == "IMAGE").ToList();
 
         var client = CreateHttpClient(req =>
         {
-            var path = req.RequestUri!.AbsolutePath;
-            if (path.StartsWith("/api/albums/album1"))
-                return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(album1) };
-            if (path.StartsWith("/api/albums/album2"))
-                return new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(album2) };
-            // default fallback
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath == "/api/search/metadata")
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(BuildSearchResponse(filteredForService), Encoding.UTF8, "application/json")
+                };
+            }
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         });
 
@@ -86,7 +101,7 @@ public class ImmichServiceTests
         var resultAll = await service.GetPagedArtAsync(1, 10);
         var listAll = new List<ArtWorkResponse>(resultAll);
 
-        // Assert – should contain only two IMAGE assets, sorted newest first (B then A)
+        // Assert – should contain both IMAGE assets, sorted newest first (B then A).
         Assert.Equal(2, listAll.Count);
         Assert.Equal("B", listAll[0].Id);
         Assert.Equal("A", listAll[1].Id);
@@ -96,6 +111,123 @@ public class ImmichServiceTests
         var listPage2 = new List<ArtWorkResponse>(resultPage2);
         Assert.Single(listPage2);
         Assert.Equal("A", listPage2[0].Id);
+    }
+
+    [Fact]
+    public async Task GetPagedArtAsync_SendsPostSearchMetadata_WithAlbumIdsAndImageType()
+    {
+        // Asserts the wire shape of the v3 call: POST /api/search/metadata
+        // with albumIds, type=IMAGE, size=1000, order=desc. This is the
+        // contract the Immich v3 server expects.
+        HttpRequestMessage? captured = null;
+        string? capturedBody = null;
+
+        var client = CreateHttpClient(req =>
+        {
+            captured = req;
+            if (req.Content != null)
+            {
+                capturedBody = req.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(BuildSearchResponse(Array.Empty<ImmichAsset>(), 0), Encoding.UTF8, "application/json")
+            };
+        });
+
+        var config = BuildConfig("album-1", "album-2");
+        var logger = Mock.Of<ILogger<ImmichService>>();
+        var service = new ImmichService(client, config);
+
+        _ = await service.GetPagedArtAsync(1, 10);
+
+        Assert.NotNull(captured);
+        Assert.Equal(HttpMethod.Post, captured!.Method);
+        Assert.Equal("/api/search/metadata", captured.RequestUri!.AbsolutePath);
+        Assert.NotNull(capturedBody);
+
+        var body = capturedBody!;
+        Assert.Contains("\"albumIds\":[", body);
+        Assert.Contains("album-1", body);
+        Assert.Contains("album-2", body);
+        Assert.Contains("\"type\":\"IMAGE\"", body);
+        Assert.Contains("\"order\":\"desc\"", body);
+        Assert.Contains("\"size\":1000", body);
+    }
+
+    [Fact]
+    public async Task GetPagedArtAsync_Paginates_WhenTotalExceedsPageSize()
+    {
+        // v3 caps the search endpoint at 1000 items per call. If an album has
+        // more than 1000 items, the service should follow up with additional
+        // page requests until `total` is satisfied.
+        var page1Items = Enumerable.Range(1, 1000)
+            .Select(i => new ImmichAsset
+            {
+                Id = $"a{i:0000}",
+                Type = "IMAGE",
+                FileCreatedAt = new DateTime(2023, 1, 1).AddSeconds(i)
+            })
+            .ToList();
+        var page2Items = Enumerable.Range(1001, 500)
+            .Select(i => new ImmichAsset
+            {
+                Id = $"a{i:0000}",
+                Type = "IMAGE",
+                FileCreatedAt = new DateTime(2023, 1, 1).AddSeconds(i)
+            })
+            .ToList();
+
+        var seenPages = new List<int>();
+        var client = CreateHttpClient(req =>
+        {
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsolutePath == "/api/search/metadata")
+            {
+                var body = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+                using var doc = JsonDocument.Parse(body);
+                var page = doc.RootElement.GetProperty("page").GetInt32();
+                seenPages.Add(page);
+                var items = page == 1 ? page1Items : page2Items;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(BuildSearchResponse(items, 1500), Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var config = BuildConfig("bigAlbum");
+        var logger = Mock.Of<ILogger<ImmichService>>();
+        var service = new ImmichService(client, config);
+
+        var result = await service.GetPagedArtAsync(1, 2000);
+        var list = new List<ArtWorkResponse>(result);
+
+        Assert.Equal(1500, list.Count);
+        Assert.Equal(new[] { 1, 2 }, seenPages);
+        // Newest first: a1500 should be at the top.
+        Assert.Equal("a1500", list[0].Id);
+    }
+
+    [Fact]
+    public async Task GetPagedArtAsync_NoAlbumsConfigured_ReturnsEmpty()
+    {
+        // With no Immich:AlbumIds configured, the service should not call
+        // Immich at all and return an empty list.
+        var calls = 0;
+        var client = CreateHttpClient(req =>
+        {
+            calls++;
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var config = BuildConfig(); // no albums
+        var logger = Mock.Of<ILogger<ImmichService>>();
+        var service = new ImmichService(client, config);
+
+        var result = await service.GetPagedArtAsync(1, 10);
+        Assert.Empty(result);
+        Assert.Equal(0, calls);
     }
 
     [Fact]
